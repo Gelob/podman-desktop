@@ -17,17 +17,10 @@
  ***********************************************************************/
 
 import { beforeEach, expect, test, vi } from 'vitest';
-import type { OS } from './os';
-import { CliRun } from './cli-run';
-import type * as extensionApi from '@podman-desktop/api';
+import { installBinaryToSystem } from './cli-run';
+import * as extensionApi from '@podman-desktop/api';
 import * as sudo from 'sudo-prompt';
 import * as fs from 'node:fs';
-
-const osMock = {
-  isLinux: vi.fn(),
-  isMac: vi.fn(),
-  isWindows: vi.fn(),
-};
 
 vi.mock('@podman-desktop/api', async () => {
   return {
@@ -39,6 +32,9 @@ vi.mock('@podman-desktop/api', async () => {
     },
     ProgressLocation: {
       APP_ICON: 1,
+    },
+    process: {
+      exec: vi.fn(),
     },
   };
 });
@@ -70,13 +66,16 @@ test('error: expect installBinaryToSystem to fail with a non existing binary', a
     value: 'linux',
   });
 
-  // Create the CliRun object to call installBinaryToSystem
-  let fakeContext: extensionApi.ExtensionContext;
-  let fakeOs: OS;
-  const cliRun = new CliRun(fakeContext, fakeOs);
+  vi.spyOn(extensionApi.process, 'exec').mockImplementation(
+    () =>
+      new Promise<extensionApi.RunResult>((resolve, reject) => {
+        // eslint-disable-next-line prefer-promise-reject-errors
+        reject({ exitCode: 1602 } as extensionApi.RunError);
+      }),
+  );
 
   // Expect await installBinaryToSystem to throw an error
-  await expect(cliRun.installBinaryToSystem('test', 'tmpBinary')).rejects.toThrowError();
+  await expect(installBinaryToSystem('test', 'tmpBinary')).rejects.toThrowError();
 });
 
 test('success: installBinaryToSystem on mac with /usr/local/bin already created', async () => {
@@ -84,10 +83,6 @@ test('success: installBinaryToSystem on mac with /usr/local/bin already created'
   Object.defineProperty(process, 'platform', {
     value: 'darwin',
   });
-
-  // Create the CliRun object to call installBinaryToSystem
-  let fakeContext: extensionApi.ExtensionContext;
-  const cliRun = new CliRun(fakeContext, osMock);
 
   // Mock existsSync to be true since within the function it's doing: !fs.existsSync(localBinDir)
   vi.spyOn(fs, 'existsSync').mockImplementation(() => {
@@ -102,7 +97,7 @@ test('success: installBinaryToSystem on mac with /usr/local/bin already created'
   });
 
   // Run installBinaryToSystem which will trigger the spyOn mock
-  await cliRun.installBinaryToSystem('test', 'tmpBinary');
+  await installBinaryToSystem('test', 'tmpBinary');
 });
 
 test('success: installBinaryToSystem on mac with /usr/local/bin NOT created yet (expect mkdir -p command)', async () => {
@@ -111,10 +106,6 @@ test('success: installBinaryToSystem on mac with /usr/local/bin NOT created yet 
     value: 'darwin',
   });
 
-  // Create the CliRun object to call installBinaryToSystem
-  let fakeContext: extensionApi.ExtensionContext;
-  const cliRun = new CliRun(fakeContext, osMock);
-
   // Mock existsSync to be false since within the function it's doing: !fs.existsSync(localBinDir)
   vi.spyOn(fs, 'existsSync').mockImplementation(() => {
     return false;
@@ -128,7 +119,7 @@ test('success: installBinaryToSystem on mac with /usr/local/bin NOT created yet 
   });
 
   // Run installBinaryToSystem which will trigger the spyOn mock
-  await cliRun.installBinaryToSystem('test', 'tmpBinary');
+  await installBinaryToSystem('test', 'tmpBinary');
 });
 
 test('success: installBinaryToSystem on linux with /usr/local/bin NOT created yet (expect mkdir -p command)', async () => {
@@ -137,10 +128,6 @@ test('success: installBinaryToSystem on linux with /usr/local/bin NOT created ye
     value: 'linux',
   });
 
-  // Create the CliRun object to call installBinaryToSystem
-  let fakeContext: extensionApi.ExtensionContext;
-  const cliRun = new CliRun(fakeContext, osMock);
-
   // Mock existsSync to be false since within the function it's doing: !fs.existsSync(localBinDir)
   vi.spyOn(fs, 'existsSync').mockImplementation(() => {
     return false;
@@ -154,5 +141,5 @@ test('success: installBinaryToSystem on linux with /usr/local/bin NOT created ye
   });
 
   // Run installBinaryToSystem which will trigger the spyOn mock
-  await cliRun.installBinaryToSystem('test', 'tmpBinary');
+  await installBinaryToSystem('test', 'tmpBinary');
 });
